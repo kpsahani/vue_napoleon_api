@@ -1,0 +1,2 @@
+[23-Feb-2015 05:02:44 America/Chicago] PHP Warning:  move_uploaded_file(/home4/mbdbtech/public_html/officeapp/ck_upload/dv6_3225h.jpg): failed to open stream: No such file or directory in /home4/mbdbtech/public_html/projects/officeapp/ckeditor/plugins/imgupload.php on line 44
+[23-Feb-2015 05:02:44 America/Chicago] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpYu6qpP' to '/home4/mbdbtech/public_html/officeapp/ck_upload/dv6_3225h.jpg' in /home4/mbdbtech/public_html/projects/officeapp/ckeditor/plugins/imgupload.php on line 44

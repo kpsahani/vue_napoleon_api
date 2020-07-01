@@ -1,0 +1,588 @@
+<?php
+
+if (!defined('BASEPATH'))
+    exit('No direct script access allowed');
+ob_start();
+
+class User extends CI_Controller {
+
+    /**
+     * Index Page for this controller.
+     *
+     * Maps to the following URL
+     * 		http://example.com/index.php/dashboard
+     * 	- or -  
+     * 		http://example.com/index.php/dashboard/index
+     * 	- or -
+     * Since this controller is set as the default controller in 
+     * config/routes.php, it's displayed at http://example.com/
+     *
+     * So any other public methods not prefixed with an underscore will
+     * map to /index.php/dashboard/<method_name>
+     * @see http://codeigniter.com/user_guide/general/urls.html
+     */
+    public $paging;
+    public $data;
+
+    public function __construct() {
+        parent::__construct();
+
+        //Loading Model File
+
+        $this->load->model('users');
+        include('include.php');
+        //Load header and save in variable
+    }
+
+    //loads all category listing of project
+    public function index() 
+    {
+        $limit = $this->paging['per_page'];
+        $offset = ($this->uri->segment(3) != '') ? $this->uri->segment(3) : 0;
+        //Addingg Setting Result to variable
+        $this->data['users'] = $this->users->get_all_users($limit, $offset);
+        //echo "<pre>";print_r($this->data['users']);die();
+        $this->paging['base_url'] = site_url("user/index");
+        $this->paging['uri_segment'] = 3;
+        $this->paging['total_rows'] = count($this->users->get_all_users());
+        $this->pagination->initialize($this->paging);
+        //Loading View File
+        $this->load->view('user/index', $this->data);
+
+    }
+    public function search()
+    {
+        $limit = $this->paging['per_page'];
+        if($this->input->post('search_data'))
+        {
+            $offset = ($this->uri->segment(4) != '') ? $this->uri->segment(4) : 0;
+            $search  = $this->input->post('user_search');
+            if($search =="")
+            {
+                redirect('user','refresh');
+            }
+            //Addingg Setting Result to variable
+            $this->data['users'] = $this->users->get_all_users_search($search,$limit, $offset);
+            $this->paging['base_url'] = site_url("user/search/".$search);
+            $this->paging['uri_segment'] = 4;
+            $this->paging['total_rows'] = count($this->users->get_all_users_search($search));
+            $this->data['keyword'] = $search;
+        }
+        else if($this->uri->segment(3) != "")
+        { 
+            $offset = ($this->uri->segment(4) != '') ? $this->uri->segment(4) : 0;
+            $search  = $this->uri->segment(3);
+            //Addingg Setting Result to variable
+            $this->data['users'] = $this->users->get_all_users_search($search,$limit, $offset);
+            $this->paging['base_url'] = site_url("user/search/".$search);
+            $this->paging['uri_segment'] = 4;
+            $this->paging['total_rows'] = count($this->users->get_all_users_search($search));
+            $this->data['keyword'] = $search;
+        }
+        $this->pagination->initialize($this->paging);
+        //Loading View File
+        $this->load->view('user/index', $this->data);
+    }
+
+
+
+
+//change status
+    public function changestatus() {
+        $userid = $this->input->post('userid');
+        $status = $this->input->post('status');
+        if ($userid != '' && $status != '') {
+            $fieldname = '';
+            if($status == "Enable")
+            {
+                $fieldname = 'user_enable_datettime';
+            }
+            else if($status == "Disable")
+            {
+                $fieldname = 'user_disable_datettime';
+            }
+            else if($status == "Deleted")
+            {
+                $fieldname = 'user_delete_datettime';
+            }
+            $date = date("Y-m-d H:i:s");
+            if ($this->common->change_status(array('user_status' => $status,$fieldname => $date), 'user', 'user_id', $userid)) {
+                $this->session->set_flashdata('success', 'User status ' . $status . ' successfully.');
+                redirect('user', 'refresh');
+            } else {
+                $this->session->set_flashdata('error', 'There is error in updating User status. Try later');
+                redirect('user', 'refresh');
+            }
+        }
+        else
+        {
+              $this->session->set_flashdata('error', 'Record not found with specified id. Try later');
+                redirect('user', 'refresh');
+        }
+    }
+
+    //sorting  for users
+    public function sort($sortby = '', $orderby = '') {
+
+        if ($sortby == '' || $orderby == '') {
+            redirect('user', 'refresh');
+        }
+        if ($sortby != '' && !in_array($sortby, array('name','date', 'email', 'device', 'status'))) {
+            redirect('user', 'refresh');
+        }
+        if ($this->session->userdata['cmbackup_admin']) {
+            $limit = $this->paging['per_page'];
+            $offset = ($this->uri->segment(5) != '') ? $this->uri->segment(5) : 0;
+            //echo $this->uri->segment(3);
+            $this->data['users'] = $this->users->get_all_users($limit, $offset, $sortby, $orderby);
+            $this->paging['base_url'] = site_url("user/sort/" . $this->uri->segment(3) . "/" . $this->uri->segment(4));
+            $this->paging['uri_segment'] = 5;
+            $this->paging['total_rows'] = count($this->users->get_all_users());
+            $this->pagination->initialize($this->paging);
+
+            $this->data['keyword'] = '';
+            //Loading View File
+            $this->load->view('user/index', $this->data);
+        }
+    }
+    
+    // User Uploaded File
+    public function uploadfile($userid='',$type='')
+    {
+        if($userid == "")
+        {
+            $this->session->set_flashdata('error','Something went wrong please try again');
+            redirect('user','refesh');
+        }
+        else
+        {
+            $user_id = base64_decode($userid);
+            $userdetail = $this->common->select_database_id($tablename='user',$columnname='user_id',$user_id,$data='user_folder_name');
+            if(count($userdetail)<=0)
+            {
+                $this->session->set_flashdata('error','Specific user details not found');
+                redirect('user','refesh');
+            }
+            else
+            {
+                $foldername = $this->config->item('upload_folder_path').$userdetail[0]['user_folder_name']."/backup/";
+                $limit = $this->paging['per_page'];
+
+
+                $offset = ($this->uri->segment(5) != '') ? $this->uri->segment(5) : 0;
+                if(is_numeric($type) || $type == "")
+                {
+                    $type = "contact";
+                } 
+                //echo $userid ;
+                //echo "<br/>";
+                //echo $type; die();
+                //Addingg Setting Result to variable
+                switch ($type)
+                {
+                    case "contact": 
+                        $foldername = $foldername."contacts/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='No',$limit,$offset,$sortby = 'ucon_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='No'));
+                        break;
+                    case "message": 
+                        $foldername = $foldername."messages/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_messages',$columnname='um_user_id',$user_id,$data,$whereclum='um_deleted',$whereval='No',$limit,$offset,$sortby = 'um_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_messages',$columnname='um_user_id',$user_id,$data,$whereclum='um_deleted',$whereval='No'));
+                        break;
+                    case "calllog": 
+                        $foldername = $foldername."call_logs/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_call_logs',$columnname='uclog_user_id',$user_id,$data,$whereclum='uclog_deleted',$whereval='No',$limit,$offset,$sortby = 'uclog_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_call_logs',$columnname='uclog_user_id',$user_id,$data,$whereclum='uclog_deleted',$whereval='No',$limit,$offset));
+                        break;
+                    case "bookmark": 
+                        $foldername = $foldername."bookmarks/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_bookmarks',$columnname='ub_user_id',$user_id,$data,$whereclum='ub_deleted',$whereval='No',$limit,$offset,$sortby = 'ub_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_bookmarks',$columnname='ub_user_id',$user_id,$data,$whereclum='ub_deleted',$whereval='No'));
+                        break;
+                   
+                    case "dictionary": 
+                        $foldername = $foldername."dictionaries/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_dictionaries',$columnname='ud_user_id',$user_id,$data,$whereclum='ud_deleted',$whereval='No',$limit,$offset,$sortby = 'ud_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_dictionaries',$columnname='ud_user_id',$user_id,$data,$whereclum='ud_deleted',$whereval='No'));
+                        break;
+                    break;
+                    case "calendar": 
+                        $foldername = $foldername."calendars/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_calendars',$columnname='ucal_user_id',$user_id,$data,$whereclum='ucal_deleted',$whereval='No',$limit,$offset,$sortby = 'ucal_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_calendars',$columnname='ucal_user_id',$user_id,$data,$whereclum='ucal_deleted',$whereval='No'));
+                        break;
+                    break;
+                    case "photo": 
+                        $foldername = $foldername."photos/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_photos',$columnname='up_user_id',$user_id,$data,$whereclum='up_deleted',$whereval='No',$limit,$offset,$sortby = 'up_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_photos',$columnname='up_user_id',$user_id,$data,$whereclum='up_deleted',$whereval='No'));
+                        break;
+                    break;
+                    case "video":
+                        $foldername = $foldername."videos/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_videos',$columnname='uv_user_id',$user_id,$data,$whereclum='uv_deleted',$whereval='No',$limit,$offset,$sortby = 'uv_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_videos',$columnname='uv_user_id',$user_id,$data,$whereclum='uv_deleted',$whereval='No'));
+                        break;
+                    break;
+                    case "download": 
+                        $foldername = $foldername."downloads/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_downloads',$columnname='udown_user_id',$user_id,$data,$whereclum='udown_deleted',$whereval='No',$limit,$offset,$sortby = 'udown_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_downloads',$columnname='udown_user_id',$user_id,$data,$whereclum='udown_deleted',$whereval='No'));
+                        break;
+                    break;
+                    case "file":
+                        $foldername = $foldername."files/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_files',$columnname='uf_user_id',$user_id,$data,$whereclum='uf_deleted',$whereval='No',$limit,$offset,$sortby = 'uf_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_files',$columnname='uf_user_id',$user_id,$data,$whereclum='uf_deleted',$whereval='No',$limit,$offset));
+                        break;
+                    break;
+                    default:
+                        $foldername = $foldername."contacts/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='No',$limit,$offset,$sortby = 'ucon_id',$orderby = 'desc');
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='No'));
+                        break;
+                }
+                $this->data['foldername'] = $userdetail[0]['user_folder_name']."/";
+                $this->data['userid'] = $userid;
+                $this->data['userbackup'] = $result;
+               // echo "<pre>";print_r($this->data['userbackup']);die();
+                $this->paging['base_url'] = site_url("user/uploadfile/".$userid."/".$type."/");
+                $this->paging['uri_segment'] = 5;
+                $this->pagination->initialize($this->paging);
+                //Loading View File
+                $this->load->view('user/uploaded/'.$type, $this->data);
+            }
+        }
+    }
+    
+    // Downaload Uploaded File
+    public function downloadfile($foldername='',$type='',$filename='')
+    { 
+        $this->load->helper('file');
+        $this->load->helper('download');
+        $this->load->library('zip');
+        $absolutepath =$_SERVER['DOCUMENT_ROOT'].'/'.$this->config->item('backup_upload_path').$foldername."/backup/".$type."/".$filename;
+       // echo "<br/>";
+       // echo "http://localhost/cmbackup/uploads/04a0e439f539ef4b5d6293b53509b62f/backup/contacts/d4a8a0eeee9aff60de329becd7cdee1f.zip";
+        if($foldername != "" || $type !="" || $filename != "")
+        {
+//echo $absolutepath;
+ $relpath=base_url().$this->config->item('backup_upload_path').$foldername."/backup/".$type."/".$filename;
+force_download($filename,$relpath);
+          //  if(file_exists($absolutepath))
+           // {  
+//echo $relpath=base_url().$this->config->item('backup_upload_path').$foldername."/backup/".$type."/".$filename;
+               // $data = file_get_contents($absolutepath); // Read the file's contents
+			
+                
+          //  }
+        }
+        else
+        {
+            $this->session->set_flashdata('error','Something went wrong please try agian');
+            redirect($_SERVER['HTTP_REFERER'],'refresh');
+        }
+    }
+
+    
+    // User Deleted File
+    public function deletefile($userid='',$type='')
+    {
+        if($userid == "")
+        {
+            $this->session->set_flashdata('error','Something went wrong please try again');
+            redirect('user','refesh');
+        }
+        else
+        {
+            $user_id = base64_decode($userid);
+            $userdetail = $this->common->select_database_id($tablename='user',$columnname='user_id',$user_id,$data='user_folder_name');
+            if(count($userdetail)<=0)
+            {
+                $this->session->set_flashdata('error','Specific user details not found');
+                redirect('user','refesh');
+            }
+            else
+            {
+                $foldername = $this->config->item('upload_folder_path').$userdetail[0]['user_folder_name']."/backup/";
+                $limit = $this->paging['per_page'];
+                $offset = ($this->uri->segment(3) != '') ? $this->uri->segment(3) : 0;
+                if(is_numeric($type) || $type == "")
+                {
+                    $type = "contact";
+                } 
+                //echo $userid ;
+                //echo "<br/>";
+                //echo $type; die();
+                //Addingg Setting Result to variable
+                switch ($type)
+                {
+                    case "contact": 
+                        $foldername = $foldername."contacts/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    case "message": 
+                        $foldername = $foldername."messages/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_messages',$columnname='um_user_id',$user_id,$data,$whereclum='um_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_messages',$columnname='um_user_id',$user_id,$data,$whereclum='um_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    case "calllog": 
+                        $foldername = $foldername."call_logs/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_call_logs',$columnname='uclog_user_id',$user_id,$data,$whereclum='uclog_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_call_logs',$columnname='uclog_user_id',$user_id,$data,$whereclum='uclog_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    case "bookmark": 
+                        $foldername = $foldername."bookmarks/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_bookmarks',$columnname='ub_user_id',$user_id,$data,$whereclum='ub_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_bookmarks',$columnname='ub_user_id',$user_id,$data,$whereclum='ub_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "dictionary": 
+                        $foldername = $foldername."dictionaries/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_dictionaries',$columnname='ud_user_id',$user_id,$data,$whereclum='ud_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_dictionaries',$columnname='ud_user_id',$user_id,$data,$whereclum='ud_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "calendar": 
+                        $foldername = $foldername."calendars/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_calendars',$columnname='ucal_user_id',$user_id,$data,$whereclum='ucal_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_calendars',$columnname='ucal_user_id',$user_id,$data,$whereclum='ucal_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "photo": 
+                        $foldername = $foldername."photos/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_photos',$columnname='up_user_id',$user_id,$data,$whereclum='up_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_photos',$columnname='up_user_id',$user_id,$data,$whereclum='up_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "video":
+                        $foldername = $foldername."videos/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_videos',$columnname='uv_user_id',$user_id,$data,$whereclum='uv_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_videos',$columnname='uv_user_id',$user_id,$data,$whereclum='uv_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "download": 
+                        $foldername = $foldername."downloads/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_downloads',$columnname='udown_user_id',$user_id,$data,$whereclum='udown_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_downloads',$columnname='udown_user_id',$user_id,$data,$whereclum='udown_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    case "file":
+                        $foldername = $foldername."files/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_files',$columnname='uf_user_id',$user_id,$data,$whereclum='uf_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_files',$columnname='uf_user_id',$user_id,$data,$whereclum='uf_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                    break;
+                    default:
+                        $foldername = $foldername."contacts/";
+                        $data = '*';
+                        $result = $this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='Yes',$limit,$offset);
+                        $this->paging['total_rows'] = count($this->users->select_database_id($tablename='user_contacts',$columnname='ucon_user_id',$user_id,$data,$whereclum='ucon_deleted',$whereval='Yes',$limit,$offset));
+                        break;
+                }
+                $this->data['foldername'] = $userdetail[0]['user_folder_name']."/";
+                $this->data['userid'] = $userid;
+                $this->data['userbackup'] = $result;
+               // echo "<pre>";print_r($this->data['userbackup']);die();
+                $this->paging['base_url'] = site_url("user/uploaded/".$type."/".$userid."/".$type."/");
+                $this->paging['uri_segment'] = 6;
+                $this->pagination->initialize($this->paging);
+                //Loading View File
+                $this->load->view('user/deleted/'.$type, $this->data);
+            }
+        }
+    }
+    
+    // Restore Data
+    public function restoredata()
+    {
+        //echo "<pre>";print_r($_POST);die();
+        $user_id = $this->input->post('user_id');
+        $foldername = $this->input->post('foldername');
+        $type = $this->input->post('type');
+        $restoreid = $this->input->post('restore');
+        $restore_file = $this->input->post('restore_file');
+        $filepath = $_SERVER['DOCUMENT_ROOT']."/cmbackup/"."uploads/".$foldername."trash/".$type."/";
+        $restorepath = $_SERVER['DOCUMENT_ROOT']."/cmbackup/"."uploads/".$foldername."backup/".$type."/";
+        $currenturl = $this->input->post('currenturl');
+        if(count($restoreid)>0)
+        {
+            for($i=0;$i<count($restoreid);$i++)
+            {
+                if(file_exists($filepath.$restore_file[$i]))
+                {
+                    if(copy($filepath.$restore_file[$i],$restorepath.$restore_file[$i]))
+                    {
+                        // update status
+                        if(file_exists($filepath.$restore_file[$i]))
+                        {
+                            unlink($filepath.$restore_file[$i]);
+                        }
+                        $this->updaterestoredata($type,$restoreid[$i]);
+                    }
+                }
+            }
+            $this->session->set_flashdata('success','User Data successfully restored');
+            redirect($currenturl,'refresh');
+        }
+        else
+        {
+            $this->session->set_flashdata('error','Select atlist one restore file');
+            redirect($currenturl,'refresh');
+        }
+    }
+    
+    // Restore Update Data
+    public function updaterestoredata($type,$restoreid)
+    {
+        switch ($type)
+        {
+            case "contacts": 
+                $data = array('ucon_deleted'=>"No",'ucon_delete_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_contacts',$columnname='ucon_id',$restoreid);
+            break;
+            case "messages": 
+                $data = array('um_deleted'=>"No",'um_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_messages',$columnname='um_id',$restoreid);
+            break;
+            case "call_logs": 
+                $data = array('uclog_deleted'=>"No",'uclog_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_call_logs',$columnname='uclog_id',$restoreid);
+            break;
+            case "bookmarks": 
+                $data = array('ub_deleted'=>"No",'ub_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_bookmarks',$columnname='ub_id',$restoreid);
+            break;
+            case "dictionaries": 
+                $data = array('ud_deleted'=>"No",'ud_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_dictionaries',$columnname='ud_id',$restoreid);
+            break;
+            case "calendars": 
+                $data = array('ucal_deleted'=>"No",'ucal_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_calendars',$columnname='ucal_id',$restoreid);
+            break;
+            case "photos": 
+                $data = array('up_deleted'=>"No",'up_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_photos',$columnname='up_id',$restoreid);
+            break;
+            case "videos":
+                $data = array('uv_deleted'=>"No",'uv_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_videos',$columnname='uv_id',$restoreid);
+            break;
+            case "downloads": 
+                $data = array('udown_deleted'=>"No",'udown_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_downloads',$columnname='udown_id',$restoreid);
+            break;
+            case "files":
+                $data = array('uf_deleted'=>"No",'uf_insert_datetime'=>date("Y-m-d H:i:s"));
+                $this->common->update_data($data,$tablename='user_files',$columnname='uf_id',$restoreid);
+            break;
+            default:
+            echo "Something went wrong plese try again";
+        }
+        return "success";
+    }
+    
+    // Downaload Uploaded File
+    public function downloaddeletefile($foldername='',$type='',$filename='')
+    { 
+        $this->load->helper('file');
+        $this->load->helper('download');
+        $this->load->library('zip');
+        $absolutepath = $this->config->item('backup_upload_path').$foldername."/trash/".$type."/".$filename;
+       // echo "<br/>";
+       // echo "http://localhost/cmbackup/uploads/04a0e439f539ef4b5d6293b53509b62f/backup/contacts/d4a8a0eeee9aff60de329becd7cdee1f.zip";
+        if($foldername != "" || $type !="" || $filename != "")
+        {
+            if(file_exists($absolutepath))
+            {  
+                $data = file_get_contents($absolutepath); // Read the file's contents
+                force_download($filename,$data);
+            }
+        }
+        else
+        {
+            $this->session->set_flashdata('error','Something went wrong please try agian');
+            redirect($_SERVER['HTTP_REFERER'],'refresh');
+        }
+    }
+
+
+    // --------------- Report Function -----------------------//
+    public function userreport()
+    {
+        $this->load->view('user/userreport',  $this->data);
+    }
+    public function usercountreport()
+    {
+        $select_type = $this->input->post("select_type");
+        $sel_time = $this->input->post("sel_time");
+        $year = $this->input->post('year');
+        $month = $this->input->post('month');
+        $user_os_type = $this->input->post('user_os_type');
+        if($select_type == "all")
+        {
+            $result = $this->users->get_register_count($year,$month,$user_os_type);
+        }
+        else if($select_type == "live" || $select_type == "noactive" )
+        {
+            $result = $this->users->get_live_nolive_user_count($select_type,$year,$month,$user_os_type);
+        }
+        else if($select_type == "deregister")
+        {
+            $result = $this->users->get_user_by_status($select_type,$year,$month,$user_os_type);
+        }
+        else
+        { 
+            $result = $this->users->get_new_register_user_count($sel_time,$user_os_type);
+        }
+        $response = array();
+        if(count($result)>0)
+        {
+            $response[0] = array('Date' , 'User');
+            for($i=1;$i<count($result)+1;$i++)
+            {
+                if($select_type == "noactive")
+                {
+                    $date = date("M",strtotime($result[$i-1]['user_register_datetime']));
+                }
+                else
+                {
+                    $date = date("m-d",strtotime($result[$i-1]['user_register_datetime']));
+                }
+                $response[$i] = array($date,
+                                        (int)$result[$i-1]['userno']);
+            }
+        }
+        echo json_encode($response);
+    }
+
+    
+
+}
+
+/* End of file users.php */
+/* Location: ./application/controllers/user.php */

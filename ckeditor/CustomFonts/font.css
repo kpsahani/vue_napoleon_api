@@ -1,0 +1,5 @@
+@font-face {  
+   font-family: "PlayRegular";  
+   src: url(/ckeditor/Customfonts/PlayRegular.eot); /* IE */  
+   src: local("PlayRegular"), url("/ckeditor/Customfonts/PlayRegular.ttf") format("truetype"); /*non-IE*/  
+}

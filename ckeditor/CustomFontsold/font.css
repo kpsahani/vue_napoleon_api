@@ -1,0 +1,5 @@
+@font-face {  
+   font-family: "vijaya";  
+   src: url(/ckeditor/Customfonts/vijaya.eot); /* IE */  
+   src: local("vijaya"), url("/ckeditor/Customfonts/vijaya.ttf") format("truetype"); /*non-IE*/  
+}
